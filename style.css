@@ -4,3 +4,52 @@
 @media(max-width:800px){.auth-shell{grid-template-columns:1fr;gap:28px;padding:24px}.brand .logo{margin-bottom:20px}.brand h1{font-size:3rem}.auth-card{justify-self:stretch;max-width:none}.stats-grid,.network-grid{grid-template-columns:1fr}.app-shell{padding:16px}.topbar{align-items:flex-start;flex-wrap:wrap}.topbar nav{gap:13px;flex-wrap:wrap}.welcome{padding-top:26px}.section-head{align-items:start;flex-direction:column}.stat-card strong{font-size:1.7rem}}
 
 .game-panel{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;margin:22px 0;padding:24px;background:linear-gradient(135deg,#192338,#111624);border:1px solid #303b54;border-radius:22px}.game-panel h2{font-size:1.45rem}.shop-actions{display:grid;gap:8px;min-width:250px}.shop-actions form{margin:0}.shop-actions button{width:100%;margin:0}.success-note{grid-column:1/-1;color:var(--green);margin:0}.result-actions{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap}.result-actions form{margin:0}.result-actions .primary,.result-actions .secondary{margin:0}.button-link{align-items:center;justify-content:center;padding:13px 16px;border-radius:11px;font-weight:700}.result-actions .secondary{display:inline-flex}@media(max-width:800px){.game-panel{grid-template-columns:1fr}.shop-actions{min-width:0}}
+
+/* ARCADE VISUAL UPGRADE — presentation only; game rules remain server-side. */
+:root{--bg:#100b2c;--panel:#21134b;--panel2:#2a1a5b;--line:#5737a2;--text:#fff8ff;--muted:#c2b6e8;--green:#62f6cb;--cyan:#5be7ff;--purple:#d28bff;--orange:#ffc857;--arcade-pink:#ff5ec4;--arcade-blue:#5e8bff}
+body{background:radial-gradient(ellipse at 8% 0%,#452077 0%,transparent 35%),radial-gradient(ellipse at 92% 12%,#153f83 0%,transparent 30%),linear-gradient(160deg,#100b2c,#090722 78%);background-attachment:fixed}
+h1,h2,h3,.brand-mini{letter-spacing:-.025em}
+a{color:#73f7e0}
+.app-shell{max-width:1240px}
+.topbar{border-bottom:2px solid #56359a}
+.brand-mini{display:inline-flex;align-items:center;gap:9px;font-size:1.12rem;color:#fff;text-shadow:0 0 18px #b45dff}
+.brand-mini:first-letter{color:var(--arcade-pink)}
+.eyebrow{color:#ffcf5b;text-shadow:0 0 12px #ff8a3d66}
+.welcome{padding-top:32px}
+.welcome h1 span{color:var(--arcade-pink);text-shadow:0 0 24px #ff5ec466}
+.rank-pill{border:2px solid #ffcf5b;color:#ffe99a;background:linear-gradient(135deg,#63308c,#29205d);box-shadow:0 0 22px #a849ff33,inset 0 0 12px #ffcf5b16}
+.stat-card,.network-card,.table-card,.result-card,.auth-card{background:linear-gradient(150deg,#2a1958f2,#17103af5);border:1px solid #6847b5;box-shadow:0 12px 0 #08051b,0 18px 35px #03020e66,inset 0 1px #ffffff12;border-radius:20px}
+.stat-card{position:relative;overflow:hidden}
+.stat-card:before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,var(--arcade-pink),#ffc857,var(--cyan))}
+.stat-card strong{color:#fff;text-shadow:0 0 15px #8d69ff55}
+.stat-card strong small{color:#65f6cb}
+.progress{height:10px;background:#100b2c;border:1px solid #4e378c;border-radius:99px;padding:1px}
+.progress i{background:linear-gradient(90deg,#ff5ec4,#a56bff,#5be7ff);box-shadow:0 0 12px #ad66ff;border-radius:99px}
+.game-panel{position:relative;overflow:hidden;background:linear-gradient(120deg,#432078,#21134b 55%,#122c62);border:2px solid #7650c5;box-shadow:0 12px 0 #08051b,0 0 32px #8a3cff22;border-radius:22px}
+.game-panel:after{content:"✦  ✧  ✦";position:absolute;right:24px;top:12px;color:#ffe27a;letter-spacing:18px;opacity:.65;pointer-events:none}
+.game-panel h2{color:#fff;font-size:clamp(1.2rem,2.6vw,1.65rem)}
+.primary,.secondary,.locked,.button-link{border-radius:13px;font-weight:800;transition:transform .15s ease,filter .15s ease;box-shadow:0 4px 0 #08051b}
+.primary{color:#25113f;background:linear-gradient(135deg,#ffe66d,#ffad43);border:1px solid #fff0a0;text-shadow:0 1px #fff7c8}
+.primary:hover,.secondary:hover,.button-link:hover{transform:translateY(-2px);filter:brightness(1.08)}
+.secondary{color:#fff;background:linear-gradient(135deg,#7b4fe5,#4a6fff);border:1px solid #a99aff}
+.locked{background:#20183c;color:#a89bcf;border:1px dashed #67529c;box-shadow:none}
+.network-grid{gap:20px}
+.network-card{padding:22px;transition:transform .18s ease,border-color .18s ease}
+.network-card:hover{transform:translateY(-4px);border-color:#ffcf5b}
+.network-card:before{content:"LEVEL NODE";position:absolute;right:16px;top:18px;font-size:.58rem;letter-spacing:.12em;color:#c8b7ff;opacity:.8}
+.network-symbol{border-radius:18px;color:#fff;background:linear-gradient(135deg,#7149d5,#302078);border:2px solid var(--accent);box-shadow:0 0 24px color-mix(in srgb,var(--accent) 30%,transparent);width:64px;height:64px;font-size:2.3rem}
+.ltc{--accent:#5be7ff}.eth{--accent:#d28bff}.btc{--accent:#ffc857}
+.network-tag{display:inline-block;padding:5px 9px;border-radius:99px;background:#ffffff0b;border:1px solid color-mix(in srgb,var(--accent) 50%,transparent)}
+.section-head h2{color:#fff;text-shadow:0 0 18px #8f62ff44}
+.table-card{padding:10px 20px}
+th{color:#ffdc7d}tbody tr:hover{background:#ffffff08}td:first-child{color:#6ff7d7;font-weight:800}
+.success-note{color:#72ffcf;font-weight:700}
+.auth-shell .logo{background:linear-gradient(135deg,#ff5ec4,#7c5cff);color:#fff;box-shadow:0 0 30px #a45aff66;border-radius:20px}
+.brand h1 span{color:#ff72ce;text-shadow:0 0 24px #ff5ec455}
+.auth-card input{background:#120c2c;border-color:#5a3a98}.auth-card input:focus{border-color:#5be7ff;box-shadow:0 0 0 3px #5be7ff22}
+.error{background:#4a1e54;border-color:#ff5ec4}
+.success-icon{background:linear-gradient(135deg,#ffcf57,#ff6ac8);color:#32115c;box-shadow:0 0 28px #ff66ce44}
+.result-card h2{color:#ffda76}
+footer{color:#a69acb}
+@media(max-width:800px){.game-panel:after{display:none}.network-card:before{font-size:.52rem}.stat-card,.network-card{box-shadow:0 7px 0 #08051b,0 14px 24px #03020e55}.app-shell{padding:14px}.topbar nav{font-size:.82rem}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
