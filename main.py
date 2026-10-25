@@ -11,6 +11,10 @@ BASE = Path(__file__).resolve().parent
 DB = BASE / "crypto_hunt.db"
 SECRET_KEY = os.getenv("SESSION_SECRET", "CHANGE-ME-local-only-" + secrets.token_hex(16))
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip().lower()
+DAILY_CLICKS = 20
+EXTRA_CLICK_PACK = 10
+EXTRA_CLICK_COST = 100
+ETH_LEVEL_PRICE = "0.0005 ETH (DEMO)"
 
 app = FastAPI(title="Crypto Hunt")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False)
@@ -69,6 +73,23 @@ def init_db():
           action TEXT NOT NULL,
           created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS daily_usage (
+          user_id INTEGER NOT NULL,
+          day TEXT NOT NULL,
+          clicks_used INTEGER NOT NULL DEFAULT 0,
+          extra_clicks INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(user_id, day),
+          FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS game_purchases (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          purchase_type TEXT NOT NULL,
+          amount TEXT NOT NULL,
+          note TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY(user_id) REFERENCES users(id)
+        );
         """)
         # Pre-seed a modest set of demo pages. IDs are game page identifiers, not keys.
         for net in NETWORKS:
@@ -92,6 +113,21 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def now():
     return datetime.now(timezone.utc).isoformat()
+
+def today_key():
+    return datetime.now(timezone.utc).date().isoformat()
+
+def xp_needed_for_level(level: int) -> int:
+    """Total XP threshold at which a level begins."""
+    return 100 * (level - 1) * level // 2
+
+def usage_for(user_id: int):
+    day = today_key()
+    with db() as c:
+        c.execute("INSERT OR IGNORE INTO daily_usage(user_id,day) VALUES(?,?)", (user_id, day))
+        row = c.execute("SELECT clicks_used,extra_clicks FROM daily_usage WHERE user_id=? AND day=?", (user_id, day)).fetchone()
+    used, extra = row["clicks_used"], row["extra_clicks"]
+    return {"used": used, "extra": extra, "limit": DAILY_CLICKS + extra, "remaining": max(0, DAILY_CLICKS + extra - used)}
 
 def current_user(request: Request):
     uid = request.session.get("uid")
@@ -138,7 +174,10 @@ def home(request: Request):
     return templates.TemplateResponse(request=request, name="dashboard.html", context={
         "request": request, "user": user, "level": level, "xp_current": current,
         "xp_needed": needed, "claimed": claimed, "networks": NETWORKS,
-        "leaderboard": leaderboard, "admin": user["username"].lower() == ADMIN_USERNAME and bool(ADMIN_USERNAME)
+        "leaderboard": leaderboard, "admin": user["username"].lower() == ADMIN_USERNAME and bool(ADMIN_USERNAME),
+        "usage": usage_for(user["id"]), "daily_clicks": DAILY_CLICKS,
+        "extra_click_pack": EXTRA_CLICK_PACK, "extra_click_cost": EXTRA_CLICK_COST,
+        "eth_level_price": ETH_LEVEL_PRICE
     })
 
 @app.post("/register")
@@ -181,6 +220,9 @@ def claim(request: Request, network: str = Form(...)):
     network = network.upper()
     if network not in NETWORKS:
         raise HTTPException(400, "Unknown network")
+    usage = usage_for(user["id"])
+    if usage["remaining"] <= 0:
+        raise HTTPException(429, "You have used today's clicks. Buy an extra-click pack or come back tomorrow.")
     level = level_for_xp(user["xp"])
     if level < NETWORKS[network]["unlock_level"]:
         raise HTTPException(403, f"{NETWORKS[network]['label']} unlocks at level {NETWORKS[network]['unlock_level']}.")
@@ -198,6 +240,8 @@ def claim(request: Request, network: str = Form(...)):
             row = conn.execute("SELECT id,page_number FROM pages WHERE network=? AND status='available' ORDER BY RANDOM() LIMIT 1", (network,)).fetchone()
         conn.execute("UPDATE pages SET status='claimed',claimed_by=?,claimed_at=? WHERE id=? AND status='available'", (user["id"],now(),row["id"]))
         conn.execute("INSERT INTO audit_log(user_id,action,created_at) VALUES(?,?,?)", (user["id"],f"claim:{network}:{row['page_number']}",now()))
+        conn.execute("INSERT OR IGNORE INTO daily_usage(user_id,day) VALUES(?,?)", (user["id"], today_key()))
+        conn.execute("UPDATE daily_usage SET clicks_used=clicks_used+1 WHERE user_id=? AND day=?", (user["id"], today_key()))
         conn.commit()
     finally:
         conn.close()
@@ -210,6 +254,35 @@ def claim(request: Request, network: str = Form(...)):
         c.execute("INSERT INTO events(user_id,network,page_number,result,reward,created_at) VALUES(?,?,?,?,?,?)",
                   (user["id"],network,row["page_number"],"demo-puzzle",virtual_reward,now()))
     return RedirectResponse(f"/result/{network}/{row['page_number']}", status_code=303)
+
+@app.post("/shop/buy-clicks")
+def buy_clicks(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/", status_code=303)
+    with db() as c:
+        fresh = c.execute("SELECT virtual_coins FROM users WHERE id=?", (user["id"],)).fetchone()
+        if fresh["virtual_coins"] < EXTRA_CLICK_COST:
+            raise HTTPException(400, f"You need {EXTRA_CLICK_COST} VCOIN for an extra-click pack.")
+        c.execute("UPDATE users SET virtual_coins=virtual_coins-? WHERE id=?", (EXTRA_CLICK_COST, user["id"]))
+        c.execute("INSERT OR IGNORE INTO daily_usage(user_id,day) VALUES(?,?)", (user["id"], today_key()))
+        c.execute("UPDATE daily_usage SET extra_clicks=extra_clicks+? WHERE user_id=? AND day=?", (EXTRA_CLICK_PACK, user["id"], today_key()))
+        c.execute("INSERT INTO game_purchases(user_id,purchase_type,amount,note,created_at) VALUES(?,?,?,?,?)", (user["id"], "extra_clicks", str(EXTRA_CLICK_COST), "In-game VCOIN purchase", now()))
+    return RedirectResponse("/?shop=clicks", status_code=303)
+
+@app.post("/shop/buy-level")
+def buy_level(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/", status_code=303)
+    current_level = level_for_xp(user["xp"])
+    target_level = current_level + 1
+    # Explicitly a demo checkout: no wallet connection or real ETH is collected.
+    with db() as c:
+        c.execute("UPDATE users SET xp=MAX(xp, ?) WHERE id=?", (xp_needed_for_level(target_level), user["id"]))
+        c.execute("INSERT INTO game_purchases(user_id,purchase_type,amount,note,created_at) VALUES(?,?,?,?,?)", (user["id"], "level_unlock_demo", "0.0005 ETH (DEMO)", f"Demo unlock to level {target_level}; no real payment", now()))
+        c.execute("INSERT INTO audit_log(user_id,action,created_at) VALUES(?,?,?)", (user["id"], f"demo_level_unlock:{target_level}", now()))
+    return RedirectResponse("/?shop=level", status_code=303)
 
 @app.get("/result/{network}/{page_number}", response_class=HTMLResponse)
 def result(request: Request, network: str, page_number: int):
@@ -247,4 +320,4 @@ def admin(request: Request):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "mode": "local starter", "private_key_storage": False}
+    return {"ok": True, "mode": "game demo", "private_key_storage": False, "daily_click_limit": DAILY_CLICKS, "real_eth_payments": False}

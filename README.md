@@ -54,3 +54,11 @@ keys stored in environment variables. Never ask users for seed phrases or privat
 This package is arranged with files directly in the repository root.
 - Build Command: `pip install -r requirements.txt`
 - Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+
+## Game loop (updated)
+- Each account receives 20 hunt clicks per UTC day.
+- A 100 VCOIN in-game purchase adds 10 extra clicks for that day.
+- After finding a page, the player can immediately hunt another page on the same network from the result screen.
+- The “Buy next level with ETH” button is DEMO ONLY: it advances one level and records a demo purchase, but does not connect to a wallet or collect real ETH. Do not advertise it as a real-money purchase until a real payment flow is implemented and independently verified.
+- Real blockchain payments and real wallet/private-key handling are not implemented.
