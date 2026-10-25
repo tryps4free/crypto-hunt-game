@@ -16,7 +16,7 @@ pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 app = FastAPI(title="Crypto Hunt")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False)
-app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
+app.mount("/static", StaticFiles(directory=str(BASE)), name="static")
 templates = Jinja2Templates(directory=str(BASE / "app"))
 
 NETWORKS = {
