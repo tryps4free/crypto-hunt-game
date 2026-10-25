@@ -1,4 +1,4 @@
-import os, sqlite3, secrets, hashlib, random
+import os, sqlite3, secrets, hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Form, HTTPException
@@ -6,18 +6,16 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from passlib.context import CryptContext
 
-BASE = Path(__file__).resolve().parent.parent
+BASE = Path(__file__).resolve().parent
 DB = BASE / "crypto_hunt.db"
 SECRET_KEY = os.getenv("SESSION_SECRET", "CHANGE-ME-local-only-" + secrets.token_hex(16))
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip().lower()
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 app = FastAPI(title="Crypto Hunt")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False)
 app.mount("/static", StaticFiles(directory=str(BASE)), name="static")
-templates = Jinja2Templates(directory=str(BASE / "app"))
+templates = Jinja2Templates(directory=str(BASE))
 
 NETWORKS = {
     "LTC": {"unlock_level": 1, "label": "Litecoin"},
@@ -77,6 +75,21 @@ def init_db():
             for n in range(1, 501):
                 c.execute("INSERT OR IGNORE INTO pages(network,page_number) VALUES(?,?)", (net, n))
 
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 310_000).hex()
+    return f"pbkdf2_sha256${salt}${digest}"
+
+def verify_password(password: str, encoded: str) -> bool:
+    try:
+        scheme, salt, expected = encoded.split("$", 2)
+        if scheme != "pbkdf2_sha256":
+            return False
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 310_000).hex()
+        return secrets.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -116,42 +129,42 @@ def startup():
 def home(request: Request):
     user = current_user(request)
     if not user:
-        return templates.TemplateResponse("login.html", {"request": request, "error": None})
+        return templates.TemplateResponse(request=request, name="login.html", context={"request": request, "error": None})
     level = level_for_xp(user["xp"])
     current, needed = xp_into_level(user["xp"])
     with db() as c:
         claimed = c.execute("SELECT COUNT(*) n FROM pages WHERE claimed_by=?", (user["id"],)).fetchone()["n"]
         leaderboard = c.execute("SELECT username,xp,virtual_coins FROM users ORDER BY xp DESC, virtual_coins DESC LIMIT 10").fetchall()
-    return templates.TemplateResponse("dashboard.html", {
+    return templates.TemplateResponse(request=request, name="dashboard.html", context={
         "request": request, "user": user, "level": level, "xp_current": current,
         "xp_needed": needed, "claimed": claimed, "networks": NETWORKS,
         "leaderboard": leaderboard, "admin": user["username"].lower() == ADMIN_USERNAME and bool(ADMIN_USERNAME)
     })
 
 @app.post("/register")
-def register(username: str = Form(...), password: str = Form(...), request: Request = None):
+def register(request: Request, username: str = Form(...), password: str = Form(...)):
     username = username.strip()
     if len(username) < 3 or len(username) > 24 or not username.replace("_","").isalnum():
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Username: 3–24 letters/numbers/underscore."}, status_code=400)
+        return templates.TemplateResponse(request=request, name="login.html", context={"request": request, "error": "Username: 3–24 letters/numbers/underscore."}, status_code=400)
     if len(password) < 10:
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Use a password with at least 10 characters."}, status_code=400)
+        return templates.TemplateResponse(request=request, name="login.html", context={"request": request, "error": "Use a password with at least 10 characters."}, status_code=400)
     try:
         with db() as c:
             cur = c.execute("INSERT INTO users(username,password_hash,created_at) VALUES(?,?,?)",
-                            (username, pwd.hash(password), now()))
+                            (username, hash_password(password), now()))
             uid = cur.lastrowid
             c.execute("INSERT INTO audit_log(user_id,action,created_at) VALUES(?,?,?)", (uid,"register",now()))
         request.session["uid"] = uid
         return RedirectResponse("/", status_code=303)
     except sqlite3.IntegrityError:
-        return templates.TemplateResponse("login.html", {"request": request, "error": "That username is already taken."}, status_code=400)
+        return templates.TemplateResponse(request=request, name="login.html", context={"request": request, "error": "That username is already taken."}, status_code=400)
 
 @app.post("/login")
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
     with db() as c:
         user = c.execute("SELECT * FROM users WHERE username=?", (username.strip(),)).fetchone()
-    if not user or not pwd.verify(password, user["password_hash"]):
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Incorrect username or password."}, status_code=401)
+    if not user or not verify_password(password, user["password_hash"]):
+        return templates.TemplateResponse(request=request, name="login.html", context={"request": request, "error": "Incorrect username or password."}, status_code=401)
     request.session["uid"] = user["id"]
     return RedirectResponse("/", status_code=303)
 
@@ -207,7 +220,7 @@ def result(request: Request, network: str, page_number: int):
         row = c.execute("SELECT * FROM pages WHERE network=? AND page_number=? AND claimed_by=?", (network.upper(),page_number,user["id"])).fetchone()
     if not row:
         raise HTTPException(404, "Page not found for this user.")
-    return templates.TemplateResponse("result.html", {"request":request,"user":user,"page":row,"networks":NETWORKS})
+    return templates.TemplateResponse(request=request, name="result.html", context={"request":request,"user":user,"page":row,"networks":NETWORKS})
 
 @app.get("/history", response_class=HTMLResponse)
 def history(request: Request):
@@ -216,7 +229,7 @@ def history(request: Request):
         return RedirectResponse("/", status_code=303)
     with db() as c:
         rows = c.execute("SELECT network,page_number,result,reward,created_at FROM events WHERE user_id=? ORDER BY id DESC LIMIT 100",(user["id"],)).fetchall()
-    return templates.TemplateResponse("history.html", {"request":request,"user":user,"rows":rows})
+    return templates.TemplateResponse(request=request, name="history.html", context={"request":request,"user":user,"rows":rows})
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin(request: Request):
@@ -230,7 +243,7 @@ def admin(request: Request):
             "claimed": c.execute("SELECT COUNT(*) n FROM pages WHERE status='claimed'").fetchone()["n"],
             "pages": c.execute("SELECT COUNT(*) n FROM pages").fetchone()["n"],
         }
-    return templates.TemplateResponse("admin.html", {"request":request,"user":user,"users":users,"stats":stats})
+    return templates.TemplateResponse(request=request, name="admin.html", context={"request":request,"user":user,"users":users,"stats":stats})
 
 @app.get("/health")
 def health():

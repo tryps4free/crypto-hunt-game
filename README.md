@@ -22,7 +22,7 @@ python -m venv .venv
 # macOS/Linux:
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
 Open http://127.0.0.1:8000
@@ -45,6 +45,12 @@ Do not put passwords, seed phrases, or private keys in the database.
 
 ## Where to add public balance providers
 
-In `app/main.py`, find `check_public_address_balance(network, address)`.
+In `main.py`, find `check_public_address_balance(network, address)`.
 It is intentionally a placeholder. Implement it using a reputable explorer/API provider, with API
 keys stored in environment variables. Never ask users for seed phrases or private keys.
+
+
+## Render deploy (flat GitHub layout)
+This package is arranged with files directly in the repository root.
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
